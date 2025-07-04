@@ -1,83 +1,103 @@
-summarise this to readme.md file:
-```javascript
- -sSL https://raw.githubusercontent.com/CyberITEX/cyberitex-flask-api/main/user-data/install.sh | bash -s -- root 8G mail.citricollab.com
+Thanks for sharing the DNS records screenshot from Cloudflare. Based on it, I’ll guide you on how to script adding **all of these records** using Cloudflare's API and a bash script.
+
+---
+
+### ✅ Requirements
+
+1. Cloudflare **API Token** with `DNS:Edit` permission
+2. Your **Zone ID**
+3. Install `curl` and `jq`
+
+---
+
+### 📜 Bash Script to Add All Records
+
+Here’s a ready-made bash script that you can adapt:
+
+```bash
+#!/bin/bash
+
+CF_API_TOKEN="YOUR_API_TOKEN"
+ZONE_ID="YOUR_ZONE_ID"
+
+# Function to create a DNS record
+create_record() {
+  TYPE=$1
+  NAME=$2
+  CONTENT=$3
+  TTL=$4
+  PROXIED=$5
+
+  curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records" \
+    -H "Authorization: Bearer $CF_API_TOKEN" \
+    -H "Content-Type: application/json" \
+    --data '{
+      "type": "'"$TYPE"'",
+      "name": "'"$NAME"'",
+      "content": "'"$CONTENT"'",
+      "ttl": '"$TTL"',
+      "proxied": '"$PROXIED"'
+    }' | jq
+}
+
+# A records
+create_record "A" "mail.citricollab.com" "91.99.226.44" 1 false
+create_record "A" "www.citricollab.com" "74.208.75.213" 1 true
+
+# AAAA
+create_record "AAAA" "citricollab.com" "2607:f1c0:f084:7b00::1" 1 true
+
+# CNAMEs
+create_record "CNAME" "autoconfig.citricollab.com" "mail.citricollab.com" 1 false
+create_record "CNAME" "autodiscover.citricollab.com" "mail.citricollab.com" 1 false
+create_record "CNAME" "imap.citricollab.com" "mail.citricollab.com" 1 false
+create_record "CNAME" "smtp.citricollab.com" "mail.citricollab.com" 1 false
+create_record "CNAME" "webmail.citricollab.com" "mail.citricollab.com" 1 false
+
+# MX
+curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records" \
+  -H "Authorization: Bearer $CF_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  --data '{
+    "type": "MX",
+    "name": "citricollab.com",
+    "content": "mail.citricollab.com",
+    "priority": 10,
+    "ttl": 1
+  }' | jq
+
+# SRV Records (must use a different endpoint format)
+# For simplicity, these can be added manually unless you want an extended version
+
+# TXT Records
+create_record "TXT" "_acme-challenge.citricollab.com" "KLGzdaHalxQiQ_iQCXyjjUXik...." 1 false
+create_record "TXT" "_autodiscover._tcp.citricollab.com" "\"v=autodiscover1\"" 1 false
+create_record "TXT" "citricollab.com" "\"v=spf1 mx ip4:91.99.226.44 ~all\"" 1 false
+create_record "TXT" "dkim._domainkey.citricollab.com" "\"v=DKIM1; p=MIIBIjANBgkqhkiG...\"" 1 false
+create_record "TXT" "_dmarc.citricollab.com" "\"v=DMARC1; p=quarantine; rua=mailto:...\"" 1 false
 ```
 
+---
 
+### 📌 Notes
 
-```javascript
-cd /home
-wget https://github.com/iredmail/iRedMail/archive/refs/tags/1.7.4.tar.gz
-tar -xzf iRedMail-1.7.4.tar.gz
-cd iRedMail-1.7.4/
+* `TTL = 1` → means **Auto**
+* `proxied = true` only for www and AAAA (from your screenshot)
+* SRV records are trickier because they have multiple fields (can provide another script if needed)
+* `jq` is used for pretty-printing the JSON response; install it using `sudo apt install jq`
+
+---
+
+### ▶️ Run the Script
+
+1. Save as `add_cf_records.sh`
+2. Make executable:
+
+```bash
+chmod +x add_cf_records.sh
+./add_cf_records.sh
 ```
 
-`sudo bash iRedMail.sh`
+---
 
-setup
-
-
-1. /var/vmail
-2. (\*) Nginx 
-3. (\*) MariaDB >> setup DB root Password
-4. First mail domain(part after @): `citricollab.com`
-5. domain email: `postmaster@citricollab.com `>> Enter password
-6. Select email services
-
-
-
-After installed web URLs :
-
- \* - Roundcube webmail: https://mail.citricollab.com/mail/ 
-
-\* - SOGo groupware: https://mail.citricollab.com/SOGo/  (if selected during installation)
-
-\* - netdata (monitor): https://mail.citricollab.com/netdata/ \* 
-
-\* - Web admin panel (iRedAdmin): https://mail.citricollab.com/iredadmin/   
-
-### **Please ==reboot== your system to enable all mail services.**
-
-Sudo Reboot
-
-
-Scripts to create mailbox, delete mailbox, bulk create, bulk delete
-
-<https://github.com/ahmedali71x/iRedMail_Account_Management>
-
-
-### Certified Setup
-
-```javascript
-Setup the email certificate
-
-sudo apt install certbot python3-certbot-nginx -y
-
-sudo certbot --nginx \
--d mail.citricollab.com \
--d autoconfig.citricollab.com \
--d autodiscover.citricollab.com \
--d webmail.citricollab.com
-```
-
-* /etc/nginx/sites-available/00-default-ssl.conf
-* add : server_name mail.citricollab.com autoconfig.citricollab.com autodiscover.citricollab.com webmail.citricollab.com;
-
-
-* add symbolic link to replace the self-signed certificates as it is not secure
-* sudo ln -sf /etc/letsencrypt/live/mail.citricollab.com/fullchain.pem /etc/ssl/certs/iRedMail.crt sudo ln -sf /etc/letsencrypt/live/mail.citricollab.com/privkey.pem /etc/ssl/private/iRedMail.key
-
-
-
-DKIM Setup
-
-
-1. `amavisd -c /etc/amavisd/amavisd.conf showkeys`
-2. Change the output format to match dkim DNS record
-
-
-Mail troubleshooting if mail not sent
-
-
-1. check service status for postfix and amavis, should be running
-2. Check mail logs after sending email: /var/log/mail.log 
+Would you like me to also script the **SRV records** portion for you?
